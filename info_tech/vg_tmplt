@@ -1,0 +1,82 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+# Константы, которые можно редактировать
+VM_NAME = "vm-flow"
+VM_BOX = "ubuntu/bionic64"
+VM_CPU = 2
+VM_RAM = 2048
+SHARED_FOLDER = "./shared_folder"
+BOOT_TIMEOUT = 600                                             # Увел. время ожид. загрузки до 10 минут
+PACKAGES_TO_INSTALL = ["git", "docker.io", "python3", "curl"]  # Список пакетов для установки
+
+Vagrant.configure("2") do |config|
+  config.vm.boot_timeout = BOOT_TIMEOUT
+
+  config.vm.define VM_NAME do |node|
+    node.vm.box = VM_BOX
+    node.vm.hostname = VM_NAME
+
+    node.vm.provider "virtualbox" do |vb|
+      vb.name = VM_NAME
+      vb.cpus = VM_CPU
+      vb.memory = VM_RAM
+
+      # Проверяем, существует ли диск <VM_NAME>-disk.vdi
+      disk_name = "#{VM_NAME}-disk.vdi"
+      unless File.exist?(disk_name)
+        # Если диск не существует, создаем его
+        vb.customize ["createhd", "--filename", disk_name, "--size", 10 * 1024]
+      end
+      vb.customize ["storageattach", :id, "--storagectl", "SATA Controller", "--port", 1, "--device", 0, "--type", "hdd", "--medium", disk_name]
+    end
+
+    # Монтирование общей папки
+    node.vm.synced_folder SHARED_FOLDER, "/vagrant_data"
+
+    # Провижинг (установка необходимого ПО)
+    node.vm.provision "shell", inline: <<-SHELL
+      apt-get update
+
+      # Устанавливаем необходимые пакеты
+      for package in #{PACKAGES_TO_INSTALL.join(" ")}; do
+        apt-get install -y $package
+      done
+
+      # Добавляем текущего пользователя в группу docker
+      # и перезагружаем сессию текущего пользователя
+      sudo usermod -aG docker ${USER}
+      #su - ${USER}
+
+      # Устанавливаем права доступа к Docker сокету
+      sudo chmod 666 /var/run/docker.sock
+
+      # Перезагружаем службу Docker
+      sudo systemctl restart docker
+
+      # Обновляем группы для текущего пользователя
+      newgrp docker
+
+      mkdir -p /home/vagrant/.config/systemd/user
+      cat << EOF > /home/vagrant/.config/systemd/user/sender.service
+
+    [Unit]
+    Description=Sender Service
+    After=network-online.target
+
+    [Service]
+    ExecStart=/usr/bin/docker run --rm -v /vagrant_data:/data alpine:latest tail -f /dev/null
+    Restart=always
+    RestartSec=10
+
+    [Install]
+    WantedBy=default.target
+    EOF
+
+    systemctl --user enable sender
+    systemctl --user start sender
+
+    SHELL
+  end
+end
+

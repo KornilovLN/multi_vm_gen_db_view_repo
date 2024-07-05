@@ -1,0 +1,117 @@
+
+## Установка и настройка Docker Registry
+
+Docker Registry -   это официальное хранилище для Docker-образов.
+                    Мы будем использовать его для хранения образов на vm-repo.
+
+1 Установите пакет registry на vm-repo (он уже включен в список packages_to_install в vms.json).
+
+2 Создайте директорию для хранения образов, например, /var/lib/registry.
+
+3 Создайте файл конфигурации для Docker Registry,
+  например, /etc/docker/registry/config.yml, со следующим содержимым:
+
+version: 0.1
+log:
+  fields:
+    service: registry
+storage:
+  filesystem:
+    rootdirectory: /var/lib/registry
+http:
+  addr: :5000
+
+
+Эта конфигурация указывает Docker Registry использовать директорию /var/lib/registry
+для хранения образов и слушать порт 5000 для входящих HTTP-запросов.
+
+4 Запустите Docker Registry с использованием созданной конфигурации:
+
+docker run -d -p 5000:5000 --restart=always --name registry \
+  -v /etc/docker/registry:/etc/docker/registry \
+  -v /var/lib/registry:/var/lib/registry \
+  registry:2
+
+
+Эта команда запускает контейнер с Docker Registry,
+монтирует директории с конфигурацией и хранилищем образов,
+и перезапускает контейнер в случае его остановки.
+
+Создание веб-приложения для управления хранилищем образов
+Мы создадим простое веб-приложение на Flask (Python) для управления хранилищем образов.
+
+5 Создайте новую директорию для веб-приложения, например, /opt/registry-app.
+
+6 Создайте файл app.py со следующим содержимым:
+
+from flask import Flask, request, jsonify
+import docker
+
+app = Flask(__name__)
+client = docker.from_env()
+
+@app.route('/images', methods=['GET'])
+def list_images():
+    images = client.images.list()
+    return jsonify([{'id': image.id, 'tags': image.tags} for image in images])
+
+@app.route('/images/<image_id>', methods=['GET'])
+def get_image(image_id):
+    image = client.images.get(image_id)
+    return jsonify({'id': image.id, 'tags': image.tags})
+
+@app.route('/images', methods=['POST'])
+def push_image():
+    image = client.images.pull(request.json['name'], request.json['tag'])
+    return jsonify({'id': image.id, 'tags': image.tags})
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=8000, debug=True)
+
+
+Это простое веб-приложение предоставляет следующие endpoints:
+
+GET /images - возвращает список всех образов в хранилище.
+GET /images/<image_id> - возвращает информацию об образе с указанным ID.
+POST /images - загружает новый образ в хранилище.
+               Требуется передать JSON-объект с полями name (имя образа) и tag (тег образа).
+
+Веб-приложение использует библиотеку docker для Python для взаимодействия с Docker Registry.
+
+7 Установите необходимые зависимости для веб-приложения:
+
+apt-get install -y python3-pip
+pip3 install flask docker
+
+
+8 Запустите веб-приложение:
+
+python3 /opt/registry-app/app.py
+
+
+Теперь веб-приложение будет доступно по адресу http://vm-repo:8000.
+
+Использование веб-приложения для управления хранилищем образов
+Вы можете использовать веб-приложение для выполнения следующих операций:
+
+    - Получить список всех образов в хранилище:
+
+curl http://vm-repo:8000/images
+
+    - Получить информацию об образе с указанным ID:
+
+curl http://vm-repo:8000/images/<image_id>
+
+    - Загрузить новый образ в хранилище:
+
+curl -X POST -H "Content-Type: application/json" \
+  -d '{"name": "ubuntu", "tag": "latest"}' \
+  http://vm-repo:8000/images
+
+
+Эта команда загрузит образ ubuntu:latest в хранилище.
+
+
+9 Вы можете расширить функциональность веб-приложения,
+  добавив поддержку поиска образов по тегам, названиям или другим метаданным,
+  а также интегрировать его с другими компонентами вашей системы.

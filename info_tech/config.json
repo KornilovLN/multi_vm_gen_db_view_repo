@@ -1,0 +1,15 @@
+{
+    "vm_name": "vm-flow",
+    "vm_box": "ubuntu/bionic64",
+    "vm_cpu": 2,
+    "vm_ram": 2048,
+    "shared_folder": "./shared_folder",
+    "boot_timeout": 600,
+    "disk_size": 10240,
+    "packages_to_install": [
+      "git",
+      "docker.io",
+      "python3",
+      "curl"
+    ]
+  }

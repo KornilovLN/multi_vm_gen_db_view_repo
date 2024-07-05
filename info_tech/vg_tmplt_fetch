@@ -1,0 +1,82 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+# Константы, которые Придут из переменных окружения
+VM_NAME = ENV.fetch('VM_NAME', 'vm-default')
+VM_BOX = ENV.fetch('VM_BOX', 'ubuntu/bionic64')
+VM_CPU = ENV.fetch('VM_CPU', '2').to_i
+VM_RAM = ENV.fetch('VM_RAM', '2048').to_i
+SHARED_FOLDER = ENV.fetch('SHARED_FOLDER', './shared_folder')
+BOOT_TIMEOUT = ENV.fetch('BOOT_TIMEOUT', '600').to_i  # Увеличиваем время ожидания загрузки до 10 минут
+DISK_SIZE = ENV.fetch('DISK_SIZE', '10240').to_i  # Размер диска в МБ
+PACKAGES_TO_INSTALL = ENV.fetch('PACKAGES_TO_INSTALL', 'git,docker.io,python3,curl').split(',')
+
+Vagrant.configure("2") do |config|
+  config.vm.boot_timeout = BOOT_TIMEOUT
+
+  config.vm.define VM_NAME do |node|
+    node.vm.box = VM_BOX
+    node.vm.hostname = VM_NAME
+
+    node.vm.provider "virtualbox" do |vb|
+      vb.name = VM_NAME
+      vb.cpus = VM_CPU
+      vb.memory = VM_RAM
+
+      # Проверяем, существует ли диск <VM_NAME>-disk.vdi
+      disk_name = "#{VM_NAME}-disk.vdi"
+      unless File.exist?(disk_name)
+        # Если диск не существует, создаем его
+        vb.customize ["createhd", "--filename", disk_name, "--size", DISK_SIZE]
+      end
+      vb.customize ["storageattach", :id, "--storagectl", "SATA Controller", "--port", 1, "--device", 0, "--type", "hdd", "--medium", disk_name]
+    end
+
+    # Монтирование общей папки
+    node.vm.synced_folder SHARED_FOLDER, "/vagrant_data"
+
+    # Провижинг (установка необходимого ПО)
+    node.vm.provision "shell", inline: <<-SHELL
+      apt-get update
+
+      # Устанавливаем необходимые пакеты
+      for package in #{PACKAGES_TO_INSTALL.join(" ")}; do
+        apt-get install -y $package
+      done
+
+      # Добавляем текущего пользователя в группу docker
+      # и перезагружаем сессию текущего пользователя
+      sudo usermod -aG docker ${USER}
+      #su - ${USER}
+
+      # Устанавливаем права доступа к Docker сокету
+      sudo chmod 666 /var/run/docker.sock
+
+      # Перезагружаем службу Docker
+      sudo systemctl restart docker
+
+      # Обновляем группы для текущего пользователя
+      newgrp docker
+
+      mkdir -p /home/vagrant/.config/systemd/user
+      cat << EOF > /home/vagrant/.config/systemd/user/sender.service
+
+    [Unit]
+    Description=Sender Service
+    After=network-online.target
+
+    [Service]
+    ExecStart=/usr/bin/docker run --rm -v /vagrant_data:/data alpine:latest tail -f /dev/null
+    Restart=always
+    RestartSec=10
+
+    [Install]
+    WantedBy=default.target
+    EOF
+
+    systemctl --user enable sender
+    systemctl --user start sender
+
+    SHELL
+  end
+end
