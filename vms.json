@@ -1,5 +1,6 @@
 {
     "vm-flow": {
+    "vm_name": "vm-flow",     
     "vm_box": "ubuntu/bionic64",
     "vm_cpu": 1,
     "vm_ram": 2048,
@@ -14,6 +15,7 @@
     ]
     },
     "vm-base": {
+    "vm_name": "vm-base",     
     "vm_box": "ubuntu/bionic64",
     "vm_cpu": 2,
     "vm_ram": 8192,
@@ -27,6 +29,7 @@
     ]
     },
     "vm-view": {
+    "vm_name": "vm-view",       
     "vm_box": "ubuntu/bionic64",
     "vm_cpu": 1,
     "vm_ram": 4096,
@@ -39,6 +42,7 @@
     ]
     },
     "vm-repo": {
+    "vm_name": "vm-repo",     
     "vm_box": "ubuntu/bionic64",
     "vm_cpu": 1,
     "vm_ram": 4096,

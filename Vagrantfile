@@ -22,9 +22,9 @@ Vagrant.configure("2") do |vagrant_config|
       disk_name = "#{config['vm_name']}-disk.vdi"
       unless File.exist?(disk_name)
         # Если диск не существует, создаем его
-        vb.customize ["createhd", "--filename", disk_name, "--size", config['disk_size']]
+        #vb.customize ["createhd", "--filename", disk_name, "--size", config['disk_size']]
       end
-      vb.customize ["storageattach", :id, "--storagectl", "SATA Controller", "--port", 1, "--device", 0, "--type", "hdd", "--medium", disk_name]
+      #vb.customize ["storageattach", :id, "--storagectl", "SATA Controller", "--port", 1, "--device", 0, "--type", "hdd", "--medium", disk_name]
     end
 
     # Монтирование общей папки
